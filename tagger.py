@@ -211,6 +211,25 @@ def promo_check(title: str, summary: str, url: str = "") -> bool:
     return weak >= 2
 
 
+# News types for the "Type" filter (what the article is about, across property segments).
+NEWS_TYPES = {
+    "planning": ["quy hoach", "1/2000", "1/500", "phan khu", "master plan", "zoning", "urban planning",
+                 "dieu chinh quy hoach", "mo rong dia gioi", "sap nhap tinh", "khu kinh te", "do thi moi"],
+    "infrastructure": ["infrastructure", "expressway", "highway", "ring road", "metro", "railway", "airport",
+                       "seaport", "bridge", "public investment", "ha tang", "cao toc", "vanh dai", "duong sat",
+                       "san bay", "cang bien", "cau vuot", "nut giao", "dau tu cong", "giao thong", "tuyen duong",
+                       "quoc lo", "duong bo"],
+    "projects": ["du an", "mo ban", "ra mat", "khoi cong", "ban giao", "dong tho", "project", "launch",
+                 "groundbreaking", "handover", "khu do thi", "phan khu", "toa thap"],
+    "land": ["dat", "land", "dau gia", "thu hoi", "giai phong mat bang", "boi thuong", "tai dinh cu", "so do"],
+    "legal": ["luat", "nghi dinh", "thong tu", "nghi quyet", "quyet dinh", "chi thi", "du thao", "decree",
+              "circular", "law ", "regulation", "chinh sach", "quy dinh"],
+}
+TYPE_LABELS = {"planning": "Planning", "infrastructure": "Infrastructure", "projects": "Projects",
+               "developers": "Developers", "land": "Land", "legal": "Legal & policy", "prices": "Prices & rents",
+               "deals": "Deals / M&A", "financing": "Financing & bonds"}
+
+
 def _clean(n: str) -> str:
     for p in NOISE:
         n = n.replace(" " + p, " _")
@@ -263,7 +282,18 @@ def tag(title: str, summary: str, url: str = "", re_section: bool = False) -> di
         score = 0
     if promo:
         score = max(0, score - 4)  # sales copy sinks below real news
-    return {"segments": segments, "signals": signals, "score": score,
+    types = [t for t, words in NEWS_TYPES.items()
+             if any(re.search(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", norm_title) for w in words)]
+    if "land" in types and not ("land" in segments or "land" in _match(norm_title, SEGMENTS)):
+        types.remove("land")  # "dat" alone is ambiguous; keep land only with a land segment hit
+    if "legal_doc" in signals or "policy" in _match(norm_title, SEGMENTS):
+        types.append("legal")
+    for sig, typ in (("deal", "deals"), ("pricing", "prices"), ("financing", "financing"), ("developer", "developers"),
+                     ("supply", "projects")):
+        if sig in signals and typ not in types:
+            types.append(typ)
+    types = sorted(set(types))
+    return {"segments": segments, "signals": signals, "score": score, "types": types,
             "provinces": provinces, "promo": promo, "relevance": relevance}
 
 

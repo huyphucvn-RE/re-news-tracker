@@ -84,7 +84,7 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
 <body>
 <header>
   <h1>Real Estate News Tracker <button id="filterBtn">Filters ▾</button></h1>
-  <nav id="tabs"><button data-tab="news" class="on">News</button><button data-tab="prices">Prices</button><button data-tab="legal">Legal</button><button data-tab="developers">Developers</button><button data-tab="digest">Digest</button></nav>
+  <nav id="tabs"><button data-tab="news" class="on">News</button><button data-tab="prices">Prices</button><button data-tab="legal">Legal</button><button data-tab="developers">Developers</button><button data-tab="digest">Digest</button><button data-tab="reports">Reports</button></nav>
   <div id="newsControls">
   <div class="row">
     <input type="search" id="q" placeholder="Search (accents optional: 'gia dat' finds 'giá đất')">
@@ -127,12 +127,12 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
 <script>
 const SEG_LABEL={residential:"Residential",office:"Office",industrial:"Industrial",retail:"Retail",land:"Land",policy:"Policy",infra:"Planning & infrastructure"};
 const SIG_LABEL={deal:"Deals / M&A",pricing:"Pricing & rents",supply:"Supply & new projects",developer:"Developers",financing:"Financing & bonds",legal_doc:"Legal documents"};
-const state={segment:"",signal:"",starred:false};
+const state={segment:"",signal:"",type:"",starred:false};
 const $=id=>document.getElementById(id);
 const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 function chips(el,labels,counts,key){
-  el.innerHTML=`<span class="meta" style="margin:0 4px 0 0">${key==="segment"?"Segment":"Signal"}:</span>`+
+  el.innerHTML=`<span class="meta" style="margin:0 4px 0 0">${key==="segment"?"Property":"News type"}:</span>`+
     Object.entries(labels).map(([k,v])=>`<span class="chip ${state[key]===k?"on":""}" data-k="${k}">${v}<span class="n">${counts[k]||0}</span></span>`).join("");
   el.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{state[key]=state[key]===c.dataset.k?"":c.dataset.k;load();});
 }
@@ -140,7 +140,7 @@ function chips(el,labels,counts,key){
 async function loadStats(){
   const s=await (await fetch("/api/stats")).json();
   chips($("segChips"),SEG_LABEL,s.segments,"segment");
-  chips($("sigChips"),SIG_LABEL,s.signals,"signal");
+  chips($("sigChips"),s.type_labels||{},s.types||{},"type");
   const ca=$("area").value;
   const regs={North:[],Central:[],South:[]};Object.entries(s.regions).forEach(([p,r])=>regs[r].push(p));
   $("area").innerHTML='<option value="">All provinces</option>'+Object.entries(regs).map(([r,ps])=>
@@ -171,7 +171,7 @@ async function load(){
   const av=$("area").value;
   const p=new URLSearchParams({q:$("q").value,promo:$("promo").value,kind:$("kind").value,relevance:$("rel").value,dups:$("dups").value,
     province:av.startsWith("region:")?"":av,region:av.startsWith("region:")?av.slice(7):"",days:$("days").value,source:$("source").value,sort:$("sort").value,
-    segment:state.segment,signal:state.signal,starred:state.starred?"1":""});
+    segment:state.segment,signal:state.signal,type:state.type,starred:state.starred?"1":""});
   const d=await (await fetch("/api/articles?"+p)).json();
   $("starredChip").classList.toggle("on",state.starred);
   $("count").textContent=`${d.total} article${d.total===1?"":"s"}`+(d.total>500?" (showing first 500)":"");

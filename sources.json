@@ -1,5 +1,5 @@
 {
-  "_note": "Vietnam sources, chosen 2026-11-22 from Daniel's list plus similar papers on planning, infrastructure, developers and projects. type rss = official RSS feed. type html = the app reads the section page and picks article links matching 'pattern' (no RSS available or the RSS is empty). 'checked' says whether the URL was opened and confirmed working when the list was made. official=true marks government sources: their items get the Official badge and are never flagged as promotional. re_section=true marks a paper's property/planning section: items there count as Related even without a property keyword, unless clearly off-topic.",
+  "_note": "Vietnam sources, chosen 2026-11-22 from Daniel's list plus similar papers on planning, infrastructure, developers and projects. type rss = official RSS feed. type html = the app reads the section page and picks article links matching 'pattern' (no RSS available or the RSS is empty). 'checked' says whether the URL was opened and confirmed working when the list was made. official=true marks government sources: their items get the Official badge and are never flagged as promotional. re_section=true marks a paper's property/planning section: items there count as Related even without a property keyword, unless clearly off-topic. most_read = the papers' own most-read lists, checked every hour; an article's read score is how many hours it stayed on those lists.",
   "sources": [
     {
       "name": "VnExpress - Bất động sản",
@@ -295,6 +295,65 @@
       "url": "https://thuvienphapluat.vn/phap-luat-nha-dat",
       "pattern": "https://thuvienphapluat\\.vn/phap-luat-nha-dat/[a-z0-9-]+-\\d+\\.html",
       "checked": false,
+      "enabled": true
+    }
+  ],
+  "most_read": [
+    {
+      "name": "VnExpress - Tin xem nhiều",
+      "paper": "VnExpress",
+      "type": "rss",
+      "url": "https://vnexpress.net/rss/tin-xem-nhieu.rss",
+      "top": 20,
+      "enabled": true
+    },
+    {
+      "name": "Tuổi Trẻ - Tin xem nhiều",
+      "paper": "Tuổi Trẻ",
+      "type": "page",
+      "url": "https://tuoitre.vn/tin-xem-nhieu.htm",
+      "pattern": "https://tuoitre\\.vn/[a-z0-9-]+-\\d{15,}\\.htm",
+      "top": 20,
+      "enabled": true
+    },
+    {
+      "name": "CafeF BĐS - Đọc nhiều",
+      "paper": "CafeF",
+      "type": "block",
+      "url": "https://cafef.vn/bat-dong-san.chn",
+      "heading": "Đọc nhiều",
+      "pattern": "https://cafef\\.vn/[a-z0-9-]+-\\d{15,}\\.chn",
+      "top": 10,
+      "enabled": true
+    },
+    {
+      "name": "CafeBiz - Đọc nhiều",
+      "paper": "CafeBiz",
+      "type": "block",
+      "url": "https://cafebiz.vn/",
+      "heading": "Đọc nhiều",
+      "pattern": "https://cafebiz\\.vn/[a-z0-9-]+-\\d{15,}\\.chn",
+      "top": 10,
+      "enabled": true
+    },
+    {
+      "name": "CafeLand - Đọc nhiều",
+      "paper": "CafeLand",
+      "type": "block",
+      "url": "https://cafeland.vn/tin-tuc/",
+      "heading": "Đọc Nhiều",
+      "pattern": "https://cafeland\\.vn/tin-tuc/[a-z0-9-]+-\\d{5,}\\.html",
+      "top": 10,
+      "enabled": true
+    },
+    {
+      "name": "Báo Đầu tư BĐS - Đọc nhiều",
+      "paper": "Báo Đầu tư",
+      "type": "block",
+      "url": "https://baodautu.vn/batdongsan/thi-truong-dia-oc-d7/",
+      "heading": "Đọc nhiều",
+      "pattern": "https://baodautu\\.vn/[a-z0-9-]+-d\\d+\\.html",
+      "top": 10,
       "enabled": true
     }
   ]

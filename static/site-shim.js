@@ -20,7 +20,7 @@
     if (p.get("kind") === "news") rows = rows.filter((a) => !a.official);
     if (p.get("promo") === "hide") rows = rows.filter((a) => !a.promo);
     if (p.get("promo") === "only") rows = rows.filter((a) => a.promo);
-    for (const [f, col] of [["segment", "segments"], ["signal", "signals"], ["province", "provinces"]])
+    for (const [f, col] of [["segment", "segments"], ["signal", "signals"], ["province", "provinces"], ["type", "types"]])
       if (p.get(f)) rows = rows.filter((a) => has(a[col], p.get(f)));
     if (p.get("region")) {
       const names = Object.entries(DATA.regions).filter(([, r]) => r === p.get("region")).map(([n]) => n);
@@ -39,7 +39,7 @@
       : (x, y) => (y.published > x.published ? 1 : -1));
     const also = {};
     DATA.articles.forEach((a) => { if (a.dup_of) (also[a.dup_of] = also[a.dup_of] || []).push({ source: a.source, url: a.url }); });
-    const out = rows.slice(0, 500).map((a) => Object.assign(a, { also: also[a.id] || [] }));
+    const out = rows.slice(0, Math.min(+(p.get("limit") || 500), 5000)).map((a) => Object.assign(a, { also: also[a.id] || [] }));
     return { total: rows.length, articles: out };
   }
 
@@ -52,6 +52,7 @@
       total: DATA.articles.length, segments: count("segments", DATA.keys.segments), signals: count("signals", DATA.keys.signals),
       provinces: count("provinces", Object.keys(DATA.regions)), regions: DATA.regions,
       promo: DATA.articles.filter((a) => a.promo).length, official: DATA.articles.filter((a) => a.official).length,
+      types: count("types", Object.keys(DATA.type_labels || {})), type_labels: DATA.type_labels || {},
       relevance: rel, dups: DATA.articles.filter((a) => a.dup_of).length, sources: DATA.status,
       source_names: [...new Set(DATA.articles.map((a) => a.source))].sort(),
     };
@@ -70,6 +71,7 @@
     if (name === "legal") return reply({ legal: DATA.legal || [] });
     if (name === "developers") return reply(DATA.developers || { articles: [], watchlist: [], all: [] });
     if (name === "digest") return reply((DATA.digest || {})[u.searchParams.get("hours") || "24"] || {});
+    if (name === "popular") return reply((DATA.popular || {})[u.searchParams.get("days") || "7"] || { articles: [], papers: [] });
     if (name === "watchlist") return reply({ ok: true });  // saved on this device by the page
     if (name === "star") {
       const b = JSON.parse(opts.body), st = stars();

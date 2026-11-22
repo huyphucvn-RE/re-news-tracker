@@ -80,6 +80,10 @@ def db():
             article_id INTEGER PRIMARY KEY,
             doc_type TEXT, doc_no TEXT, other_docs TEXT, topics TEXT, effective TEXT, change TEXT, draft INTEGER
         );
+        CREATE TABLE IF NOT EXISTS mostread (
+            url TEXT, paper TEXT, list TEXT, rank INTEGER, seen TEXT,
+            PRIMARY KEY (url, list, seen)
+        );
         CREATE TABLE IF NOT EXISTS source_status (
             url TEXT PRIMARY KEY,
             name TEXT,
@@ -99,6 +103,10 @@ def db():
     if "official" not in cols:
         con.execute("ALTER TABLE articles ADD COLUMN official INTEGER DEFAULT 0")
         con.commit()
+    if "types" not in cols:  # v1.7: news types
+        con.execute("ALTER TABLE articles ADD COLUMN types TEXT DEFAULT ''")
+        con.commit()
+        _retag(con)
     if "developers" not in cols:  # v1.6: analyst functions
         con.execute("ALTER TABLE articles ADD COLUMN developers TEXT DEFAULT ''")
         con.execute("ALTER TABLE articles ADD COLUMN events TEXT DEFAULT ''")
@@ -387,6 +395,14 @@ def analyze_pending(limit=None, con=None):
                         (r["id"], lg["doc_type"], lg["doc_no"], lg["other_docs"], lg["topics"], lg["effective"],
                          lg["change"], int(lg["draft"])))
         devs = insights.developers(r["title"], (r["summary"] or "") + " " + body[:3000])
+        types = set(filter(None, (r["types"] or "").split(",")))
+        if devs:
+            types.add("developers")
+        if lg:
+            types.add("legal")
+        if con.execute("SELECT 1 FROM prices WHERE article_id=? LIMIT 1", (r["id"],)).fetchone():
+            types.add("prices")
+        con.execute("UPDATE articles SET types=? WHERE id=?", (",".join(sorted(types)), r["id"]))
         con.execute("UPDATE articles SET developers=?, events=?, analyzed=1 WHERE id=?",
                     (",".join(devs), ",".join(insights.developer_events(r["title"], r["summary"] or "")), r["id"]))
     con.commit()
@@ -407,6 +423,86 @@ def _download(src):
         return items, None
     except Exception as e:  # keep going if one source fails
         return [], f"{type(e).__name__}: {e}"[:200]
+
+
+def _block_links(page_url, raw, heading, pattern, n=10):
+    """Links listed under a heading such as 'Đọc nhiều' (most read)."""
+    text = raw.decode("utf-8", "replace")
+    m = re.search(re.escape(heading), text, re.I)
+    if not m:
+        return []
+    return scrape_listing(page_url, text[m.end(): m.end() + 30000].encode("utf-8"), pattern)[:n]
+
+
+def fetch_mostread(con):
+    """Record which articles sit in the papers' own most-read lists this hour."""
+    lists = load_sources().get("most_read", [])
+    hour = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+    now = datetime.now(timezone.utc).isoformat()
+    for ml in lists:
+        if not ml.get("enabled", True):
+            continue
+        try:
+            raw = _get(ml["url"])
+            if ml["type"] == "rss":
+                items = parse_feed(raw)[:ml.get("top", 20)]
+            elif ml["type"] == "block":
+                items = _block_links(ml["url"], raw, ml["heading"], ml["pattern"], ml.get("top", 10))
+            else:
+                items = scrape_listing(ml["url"], raw, ml["pattern"])[:ml.get("top", 20)]
+            for rank, it in enumerate(items, 1):
+                con.execute("INSERT OR IGNORE INTO mostread VALUES (?,?,?,?,?)", (it["url"], ml["paper"], ml["name"], rank, hour))
+                if not con.execute("SELECT 1 FROM articles WHERE url=?", (it["url"],)).fetchone():
+                    t = tagger.tag(it["title"], it.get("summary", ""), it["url"])
+                    cur = con.execute(
+                        "INSERT OR IGNORE INTO articles (url,title,summary,source,lang,published,fetched,segments,signals,score,"
+                        "provinces,promo,official,relevance,types) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
+                        (it["url"], it["title"], it.get("summary", ""), ml["name"], "", it.get("published") or now, now,
+                         ",".join(t["segments"]), ",".join(t["signals"]), t["score"], ",".join(t["provinces"]),
+                         int(t["promo"]), t["relevance"], ",".join(t["types"])))
+                    if cur.rowcount:
+                        con.execute("UPDATE articles SET dup_of=? WHERE id=?",
+                                    (_find_dup(con, cur.lastrowid, it["title"], it.get("published") or now), cur.lastrowid))
+            if not items:
+                raise ValueError("most-read list not found on the page; the layout may have changed")
+            ok, msg = 1, f"ok ({len(items)} listed)"
+        except Exception as e:
+            ok, msg = 0, f"{type(e).__name__}: {e}"[:200]
+        con.execute("INSERT OR REPLACE INTO source_status (url,name,last_run,ok,message,new_items) VALUES (?,?,?,?,?,?)",
+                    (ml["url"], "Most read: " + ml["name"], now, ok, msg, 0))
+        print(f"  {'OK ' if ok else 'ERR'} most read {ml['name']}: {msg}", flush=True)
+    con.commit()
+
+
+def popular(days=7):
+    """Most-read ranking (hours an article sat in a paper's most-read list) and most-covered ranking."""
+    since = _since(days)
+    since_hour = since[:13]
+    con = db()
+    reads = {}
+    for r in con.execute(
+            "SELECT a.id, a.dup_of, m.paper, COUNT(*) n, MIN(m.rank) best FROM mostread m JOIN articles a ON a.url=m.url "
+            "WHERE m.seen>=? GROUP BY a.id, m.paper", (since_hour,)):
+        key = r["dup_of"] or r["id"]
+        d = reads.setdefault(key, {"papers": {}, "best": 99})
+        d["papers"][r["paper"]] = d["papers"].get(r["paper"], 0) + r["n"]
+        d["best"] = min(d["best"], r["best"])
+    cover = {r[0]: r[1] for r in con.execute(
+        "SELECT dup_of, COUNT(*)+1 FROM articles WHERE dup_of IS NOT NULL AND published>=? GROUP BY dup_of", (since,))}
+    ids = set(reads) | {k for k, v in cover.items() if v >= 2}
+    rows = {}
+    if ids:
+        for r in con.execute("SELECT id,title,url,source,published,provinces,types,relevance FROM articles WHERE id IN (%s)"
+                             % ",".join("?" * len(ids)), list(ids)):
+            d = dict(r)
+            d["reads"] = reads.get(r["id"], {}).get("papers", {})
+            d["best_rank"] = reads.get(r["id"], {}).get("best")
+            d["coverage"] = cover.get(r["id"], 1)
+            d["also"] = [dict(x) for x in con.execute("SELECT source,url FROM articles WHERE dup_of=?", (r["id"],))]
+            rows[r["id"]] = d
+    papers = sorted({m["paper"] for m in load_sources().get("most_read", [])})
+    con.close()
+    return {"days": days, "articles": list(rows.values()), "papers": papers}
 
 
 def fetch_all():
@@ -434,8 +530,8 @@ def fetch_all():
                 )
                 if cur.rowcount:
                     dup = None if src.get("official") else _find_dup(con, cur.lastrowid, a["title"], a["published"] or now)
-                    con.execute("UPDATE articles SET relevance=?, dup_of=? WHERE id=?",
-                                (t["relevance"], dup, cur.lastrowid))
+                    con.execute("UPDATE articles SET relevance=?, dup_of=?, types=? WHERE id=?",
+                                (t["relevance"], dup, ",".join(t["types"]), cur.lastrowid))
                 new += cur.rowcount
             ok, msg = (0, err) if err else (1, "ok")
             con.execute(
@@ -445,6 +541,10 @@ def fetch_all():
             report.append({"source": src["name"], "ok": bool(ok), "new": new, "message": msg})
             print(f"  {'OK ' if ok else 'ERR'} {src['name']}: {new} new" + ("" if ok else f" ({msg})"), flush=True)
         con.commit()
+        try:
+            fetch_mostread(con)
+        except Exception as e:
+            print("  most-read failed:", e)
         try:
             analyze_pending(con=con)
         except Exception as e:
@@ -465,6 +565,11 @@ def _retag(con):
         con.execute("UPDATE articles SET segments=?, signals=?, score=?, provinces=?, promo=? WHERE id=?",
                     (",".join(t["segments"]), ",".join(t["signals"]), t["score"],
                      ",".join(t["provinces"]), 0 if official else int(t["promo"]), row["id"]))
+        if "types" in cols:
+            extra = set()
+            if "developers" in cols and row["developers"]:
+                extra.add("developers")
+            con.execute("UPDATE articles SET types=? WHERE id=?", (",".join(sorted(set(t["types"]) | extra)), row["id"]))
         if "relevance" in cols:
             con.execute("UPDATE articles SET relevance=? WHERE id=?", (t["relevance"], row["id"]))
     con.commit()
@@ -519,6 +624,9 @@ def query_articles(params):
         if v:
             where.append(f"(','||{col}||',') LIKE ?")
             args.append(f"%,{v},%")
+    if params.get("type"):
+        where.append("(','||types||',') LIKE ?")
+        args.append(f"%,{params['type']},%")
     if params.get("province"):
         where.append("(','||provinces||',') LIKE ?")
         args.append(f"%,{params['province']},%")
@@ -559,7 +667,7 @@ def query_articles(params):
         terms = tagger.normalize(q).split()
         rows = [r for r in rows if all(t in tagger.normalize(r["title"] + " " + r["summary"] + " " + r["source"]) for t in terms)]
     total = len(rows)
-    rows = rows[:500]
+    rows = rows[:min(int(params.get("limit", 500)), 5000)]
     ids = [r["id"] for r in rows]
     if ids:  # "also reported by" for each story
         con = db()
@@ -632,6 +740,48 @@ def digest(hours=24):
             "legal": legal, "prices": prices, "developers": dev}
 
 
+def digest_html(g, title):
+    """The digest as a simple HTML email."""
+    e = html.escape
+    def li(a, extra=""):
+        return f'<li style="margin:4px 0"><a href="{e(a["url"])}">{e(a["title"])}</a> <span style="color:#777">{e(a.get("source",""))}{extra}</span></li>'
+    def block(h, items, f=li):
+        body = "".join(f(a) for a in items) if items else '<li style="color:#777">Nothing new.</li>'
+        return f'<h3 style="margin:18px 0 6px;font-size:15px">{h}</h3><ol style="padding-left:20px;margin:0">{body}</ol>'
+    parts = [f'<div style="font-family:Arial,sans-serif;font-size:14px;max-width:720px"><h2 style="font-size:18px">{e(title)}</h2>']
+    parts.append(block("North: Hanoi, Hai Phong, Quang Ninh, Bac Ninh", g["regions"]["North"]))
+    parts.append(block("Central: Da Nang, Quang Nam, Quang Ngai", g["regions"]["Central"]))
+    parts.append(block("South: HCMC, Dong Nai, Binh Duong, Long An, Ba Ria Vung Tau", g["regions"]["South"]))
+    parts.append(block("Nationwide market & policy", g["national"]))
+    parts.append(block("Legal documents", g["legal"], lambda x: li(x, f' · <b>{e(x["doc_type"])} {e(x["doc_no"])}</b>' + (f' · effective {e(x["effective"])}' if x["effective"] else ""))))
+    fmt = lambda v: f"{v:,.0f}" if v >= 100 else f"{v:,.3g}"
+    parts.append(block("Prices reported", g["prices"], lambda p: f'<li><b>{fmt(p["value"])}{"–" + fmt(p["value_high"]) if p["value_high"] else ""} {e(p["label"])}</b> {e(p["kind"])}{", " + e(p["province"]) if p["province"] else ""}: <a href="{e(p["url"])}">{e(p["title"])}</a></li>'))
+    parts.append(block("Your developers", g["developers"], lambda a: li(a, f' · <b>{e(a["developers"])}</b> {e(a["events"])}')))
+    parts.append('<p style="color:#777;font-size:12px">Sent by your RE News Tracker. Full app: https://huyphucvn-re.github.io/re-news-tracker/</p></div>')
+    return "".join(parts)
+
+
+def email_digest(force_weekly=False):
+    """Send the digest by Gmail (secrets GMAIL_USER, GMAIL_APP_PASSWORD, DIGEST_TO)."""
+    import smtplib
+    from email.mime.text import MIMEText
+    user, pw, to = os.environ.get("GMAIL_USER"), os.environ.get("GMAIL_APP_PASSWORD"), os.environ.get("DIGEST_TO")
+    if not (user and pw and to):
+        print("email not set up (GMAIL_USER / GMAIL_APP_PASSWORD / DIGEST_TO missing); skipping")
+        return
+    today = datetime.now(VN_TZ)
+    sends = [(24, f"Daily real estate digest, {today:%d/%m/%Y}")]
+    if force_weekly or today.weekday() == 0:
+        sends.append((168, f"Weekly real estate digest, week to {today:%d/%m/%Y}"))
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
+        smtp.login(user, pw)
+        for hours, subject in sends:
+            msg = MIMEText(digest_html(digest(hours), subject), "html", "utf-8")
+            msg["Subject"], msg["From"], msg["To"] = subject, user, to
+            smtp.sendmail(user, [x.strip() for x in to.split(",")], msg.as_string())
+            print("sent:", subject)
+
+
 def prices_csv():
     import io
     buf = io.StringIO()
@@ -656,6 +806,9 @@ def stats():
     out["promo"] = con.execute("SELECT COUNT(*) FROM articles WHERE promo=1").fetchone()[0]
     out["official"] = con.execute("SELECT COUNT(*) FROM articles WHERE official=1").fetchone()[0]
     out["relevance"] = {r[0]: r[1] for r in con.execute("SELECT relevance, COUNT(*) FROM articles GROUP BY relevance")}
+    out["types"] = {k: con.execute("SELECT COUNT(*) FROM articles WHERE relevance<>'off' AND dup_of IS NULL AND (','||types||',') LIKE ?",
+                                   (f"%,{k},%",)).fetchone()[0] for k in tagger.TYPE_LABELS}
+    out["type_labels"] = tagger.TYPE_LABELS
     out["dups"] = con.execute("SELECT COUNT(*) FROM articles WHERE dup_of IS NOT NULL").fetchone()[0]
     for field, rules in (("segments", tagger.SEGMENTS), ("signals", tagger.SIGNALS), ("provinces", tagger.PROVINCES)):
         for k in rules:
@@ -734,6 +887,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(get_developers(params.get("days", 180)))
         elif u.path == "/api/digest":
             self._json(digest(int(params.get("hours", 24))))
+        elif u.path == "/api/popular":
+            self._json(popular(int(params.get("days", 7))))
         elif u.path == "/api/info":
             self._json({"phone_url": PHONE_URL})
         elif u.path == "/api/export.csv":
@@ -803,13 +958,14 @@ def build_site(out_dir=None):
     os.makedirs(out_dir, exist_ok=True)
     since = datetime.fromtimestamp(time.time() - SITE_DAYS * 86400, timezone.utc).isoformat()
     con = db()
-    cols = "id,url,title,summary,source,published,segments,signals,score,provinces,promo,official,relevance,dup_of"
+    cols = "id,url,title,summary,source,published,segments,signals,score,provinces,promo,official,relevance,dup_of,types,developers"
     arts = [dict(r) for r in con.execute(f"SELECT {cols} FROM articles WHERE published>=? ORDER BY published DESC", (since,))]
     status = [dict(r) for r in con.execute("SELECT * FROM source_status ORDER BY name")]
     con.close()
     data = {"updated": datetime.now(timezone.utc).isoformat(), "articles": arts, "status": status,
             "prices": get_prices(180)["prices"], "legal": get_legal(365)["legal"],
             "developers": get_developers(180), "digest": {"24": digest(24), "168": digest(168)},
+            "popular": {"7": popular(7), "30": popular(30)}, "type_labels": tagger.TYPE_LABELS,
             "sources": load_sources()["sources"], "regions": tagger.REGION,
             "keys": {"segments": list(tagger.SEGMENTS), "signals": list(tagger.SIGNALS) + ["legal_doc"]}}
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
@@ -879,6 +1035,8 @@ if __name__ == "__main__":
         serve(phone=True, fetch_first=True)
     elif cmd == "export":
         print(export_csv())
+    elif cmd == "email-digest":
+        email_digest(force_weekly="--weekly" in sys.argv)
     elif cmd == "build-site":
         build_site()
     elif cmd == "analyze":  # read full text of older articles (backfill)
