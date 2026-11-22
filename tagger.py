@@ -65,7 +65,20 @@ RE_GENERAL = [
     "property sector", "realty", "chu dau tu", "du an nha", "du an khu", "mo ban", "so do", "so hong",
     "giay chung nhan quyen su dung dat", "quyen su dung dat", "moi gioi nha", "thi truong nha",
     "tru so", "cho thue", "gia thue", "mat bang", "nha tho cu", "dat tho cu", "trung cu", "phan lo",
+    "toa thap", "toa nha", "cao oc", "tower", "do thi", "khu nghi duong", "khach san", "resort", "condotel",
+    "hotel", "mua nha", "nha dat cong", "nha, dat", "dat cong", "dat bo hoang", "thue dat", "dat dai",
+    "nghi duong", "land", "homebuyer", "landlord", "tenant",
 ]
+
+# Phrases that look like property words once accents are removed but are not
+# (e.g. "đặt nền móng" = laying foundations, "quy hoạch cán bộ" = staff planning).
+NOISE = ["dat nen mong", "dat nen tang", "quy hoach can bo", "quy hoach lanh dao", "quy hoach nhan su",
+         "quy hoach dao tao", "quy hoach chuc danh"]
+
+# Policy news that matters for property models even without a property word.
+POLICY_MACRO = ["lai suat", "tin dung", "ngan hang nha nuoc", "interest rate", "credit growth", "state bank",
+                "thue bat dong san", "thue tai san", "property tax", "luat dat dai", "luat nha o",
+                "luat kinh doanh bat dong san", "land law", "housing law"]
 
 # Off-topic beats that business pages mix in. If the headline is about one of these and
 # has no real estate word, the article is "off topic".
@@ -74,7 +87,8 @@ OFF_TOPIC = [
     "co phieu tang tran", "ty gia", "usd/vnd", "gia xang", "xang dau", "fuel price", "bitcoin", "tien so",
     "crypto", "gia lua", "gia ca phe", "gia tieu", "gia heo", "gia thit", "thoi tiet", "xo so", "bong da",
     "showbiz", "hoa hau", "am thuc", "mon an", "du lich he", "smartphone", "dien thoai", "o to", "xe may",
-    "car sales", "ev sales",
+    "car sales", "ev sales", "noi that", "phong tam", "phong thuy", "trang tri", "meo ", "bi quyet",
+    "nghe si", "ca si", "dien vien", "sao viet",
 ]
 
 # Signals a real estate financial modeller cares about (cut across segments).
@@ -162,7 +176,7 @@ REGION = {"Hanoi": "North", "Hai Phong": "North", "Quang Ninh": "North", "Bac Ni
 # (sales-brochure language) flag when two or more appear.
 PROMO_STRONG = [
     "noi dung tai tro", "bai tai tro", "tai tro boi", "thong tin quang cao", "quang cao", "(pr)", "[pr]",
-    "sponsored", "advertorial", "partner content", "promoted",
+    "sponsored", "advertorial", "partner content",
 ]
 PROMO_WEAK = [
     "chinh sach ban hang", "uu dai", "chiet khau", "qua tang", "tang vang", "boc tham", "ho tro lai suat 0",
@@ -171,7 +185,7 @@ PROMO_WEAK = [
     "bieu tuong song", "chuan song", "phong cach song", "tam diem", "hut khach", "san hang", "chot loi",
     "dau tu sinh loi", "an cu ly tuong", "an cu lac nghiep", "kien tao", "khoi dau thinh vuong", "tuyet tac",
     "song xanh", "resort tai gia", "tien ich dang cap", "so huu ngay", "suat ngoai giao", "trai nghiem song",
-    "limited units", "luxury living", "exclusive", "world-class", "iconic", "early bird", "discount",
+    "voucher", "dac quyen", "goi vay uu dai", "limited units", "luxury living", "exclusive", "world-class", "iconic", "early bird", "discount",
 ]
 _PROMO_URL = re.compile(r"/(pr|tai-tro|thong-tin-doanh-nghiep|doanh-nghiep-viet|tin-doanh-nghiep|sponsored|partner|quang-cao)[/-]", re.I)
 
@@ -197,9 +211,15 @@ def promo_check(title: str, summary: str, url: str = "") -> bool:
     return weak >= 2
 
 
-def tag(title: str, summary: str, url: str = "") -> dict:
-    norm = normalize(f"{title} {summary}")
-    norm_title = normalize(title)
+def _clean(n: str) -> str:
+    for p in NOISE:
+        n = n.replace(" " + p, " _")
+    return n
+
+
+def tag(title: str, summary: str, url: str = "", re_section: bool = False) -> dict:
+    norm = _clean(normalize(f"{title} {summary}"))
+    norm_title = _clean(normalize(title))
     segments = _match(norm, SEGMENTS)
     signals = _match(norm, SIGNALS)
     # Priority score: Daniel's focus is deal, pricing, supply, land and policy.
@@ -231,8 +251,10 @@ def tag(title: str, summary: str, url: str = "") -> dict:
         relevance = "core"
     elif any(re.search(r"(?<![a-z0-9])" + re.escape(w), norm_title) for w in OFF_TOPIC):
         relevance = "off"
-    elif is_re(norm) or "policy" in _match(norm_title, SEGMENTS):
+    elif is_re(norm) or any(re.search(r"(?<![a-z0-9])" + re.escape(w), norm_title) for w in POLICY_MACRO):
         relevance = "related"  # e.g. interest rate or credit policy news: matters for models
+    elif re_section:
+        relevance = "related"  # from a paper's property section: benefit of the doubt
     else:
         relevance = "off"
     if relevance == "related":
@@ -258,5 +280,9 @@ def title_tokens(title: str) -> set:
 def same_story(a: set, b: set) -> bool:
     if len(a) < 5 or len(b) < 5:
         return False
+    nums_a = {w for w in a if "/" in w}
+    nums_b = {w for w in b if "/" in w}
+    if nums_a and nums_b and not (nums_a & nums_b):
+        return False  # e.g. Quyết định 736/QĐ-UBND vs 843/QĐ-UBND
     inter = len(a & b)
     return inter / len(a | b) >= 0.5 or inter / min(len(a), len(b)) >= 0.8

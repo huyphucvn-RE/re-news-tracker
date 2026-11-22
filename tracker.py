@@ -173,7 +173,7 @@ def parse_feed(raw: bytes):
 
 def _get(url):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "vi,en;q=0.8"})
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with urllib.request.urlopen(req, timeout=15) as r:
         return r.read()
 
 
@@ -317,47 +317,54 @@ def detect_source(url):
     return {"type": "html", "url": url, "pattern": pattern, "found": len(items), "sample": [i["title"] for i in items[:5]]}
 
 
+def _download(src):
+    """Network part of a fetch (runs in parallel). Returns (items, error)."""
+    try:
+        items = _items_for(src)
+        if not items and src.get("type") == "html":
+            # nothing new is fine, but zero links at all means the page layout changed
+            if not scrape_listing(src["url"], _get(src["url"]), src["pattern"]):
+                raise ValueError("no article links found; the page layout may have changed")
+        return items, None
+    except Exception as e:  # keep going if one source fails
+        return [], f"{type(e).__name__}: {e}"[:200]
+
+
 def fetch_all():
     """Fetch every enabled source, store new articles. Returns a short report."""
+    from concurrent.futures import ThreadPoolExecutor
     with _lock:
         cfg = load_sources()
+        sources = [s for s in cfg["sources"] if s.get("enabled", True)]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(_download, sources))
         con = db()
         now = datetime.now(timezone.utc).isoformat()
         report = []
-        for src in cfg["sources"]:
-            if not src.get("enabled", True):
-                continue
+        for src, (items, err) in zip(sources, results):
             new = 0
-            try:
-                items = _items_for(src)
-                if not items and src.get("type") == "html":
-                    # nothing new is fine, but zero links at all means the page layout changed
-                    if not scrape_listing(src["url"], _get(src["url"]), src["pattern"]):
-                        raise ValueError("no article links found; the page layout may have changed")
-                for a in items:
-                    t = tagger.tag(a["title"], a["summary"], a["url"])
-                    cur = con.execute(
-                        "INSERT OR IGNORE INTO articles (url,title,summary,source,lang,published,fetched,segments,signals,score,provinces,promo,official)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (a["url"], a["title"], a["summary"], src["name"], src.get("lang", ""),
-                         a["published"] or now, now, ",".join(t["segments"]), ",".join(t["signals"]), t["score"],
-                         ",".join(t["provinces"]), 0 if src.get("official") else int(t["promo"]),
-                         1 if src.get("official") else 0),
-                    )
-                    if cur.rowcount:
-                        rel = "core" if src.get("official") and t["relevance"] == "off" and t["segments"] else t["relevance"]
-                        con.execute("UPDATE articles SET relevance=?, dup_of=? WHERE id=?",
-                                    (rel, _find_dup(con, cur.lastrowid, a["title"], a["published"] or now), cur.lastrowid))
-                    new += cur.rowcount
-                ok, msg = 1, "ok"
-            except Exception as e:  # keep going if one feed fails
-                ok, msg = 0, f"{type(e).__name__}: {e}"[:200]
+            for a in items:
+                t = tagger.tag(a["title"], a["summary"], a["url"], src.get("re_section", False))
+                cur = con.execute(
+                    "INSERT OR IGNORE INTO articles (url,title,summary,source,lang,published,fetched,segments,signals,score,provinces,promo,official)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (a["url"], a["title"], a["summary"], src["name"], src.get("lang", ""),
+                     a["published"] or now, now, ",".join(t["segments"]), ",".join(t["signals"]), t["score"],
+                     ",".join(t["provinces"]), 0 if src.get("official") else int(t["promo"]),
+                     1 if src.get("official") else 0),
+                )
+                if cur.rowcount:
+                    dup = None if src.get("official") else _find_dup(con, cur.lastrowid, a["title"], a["published"] or now)
+                    con.execute("UPDATE articles SET relevance=?, dup_of=? WHERE id=?",
+                                (t["relevance"], dup, cur.lastrowid))
+                new += cur.rowcount
+            ok, msg = (0, err) if err else (1, "ok")
             con.execute(
                 "INSERT OR REPLACE INTO source_status (url,name,last_run,ok,message,new_items) VALUES (?,?,?,?,?,?)",
                 (src["url"], src["name"], now, ok, msg, new),
             )
             report.append({"source": src["name"], "ok": bool(ok), "new": new, "message": msg})
-            print(f"  {'OK ' if ok else 'ERR'} {src['name']}: {new} new" + ("" if ok else f" ({msg})"))
+            print(f"  {'OK ' if ok else 'ERR'} {src['name']}: {new} new" + ("" if ok else f" ({msg})"), flush=True)
         con.commit()
         con.close()
         return report
@@ -365,15 +372,18 @@ def fetch_all():
 
 def _retag(con):
     cols = {r[1] for r in con.execute("PRAGMA table_info(articles)")}
+    try:
+        re_names = {x["name"] for x in load_sources()["sources"] if x.get("re_section")}
+    except Exception:
+        re_names = set()
     for row in con.execute("SELECT * FROM articles").fetchall():
-        t = tagger.tag(row["title"], row["summary"], row["url"])
+        t = tagger.tag(row["title"], row["summary"], row["url"], row["source"] in re_names)
         official = "official" in cols and row["official"]
         con.execute("UPDATE articles SET segments=?, signals=?, score=?, provinces=?, promo=? WHERE id=?",
                     (",".join(t["segments"]), ",".join(t["signals"]), t["score"],
                      ",".join(t["provinces"]), 0 if official else int(t["promo"]), row["id"]))
         if "relevance" in cols:
-            rel = "core" if official and t["relevance"] == "off" and t["segments"] else t["relevance"]
-            con.execute("UPDATE articles SET relevance=? WHERE id=?", (rel, row["id"]))
+            con.execute("UPDATE articles SET relevance=? WHERE id=?", (t["relevance"], row["id"]))
     con.commit()
 
 
@@ -391,7 +401,7 @@ def _find_dup(con, new_id, title, published, earlier_only=False):
         t0 = datetime.now(timezone.utc)
     lo = (t0 - timedelta(days=DUP_WINDOW_DAYS)).isoformat()
     hi = published if earlier_only else (t0 + timedelta(days=DUP_WINDOW_DAYS)).isoformat()
-    for r in con.execute("SELECT id,title,dup_of FROM articles WHERE id<>? AND published BETWEEN ? AND ?"
+    for r in con.execute("SELECT id,title,dup_of FROM articles WHERE official=0 AND id<>? AND published BETWEEN ? AND ?"
                          + (" AND (published<? OR id<?)" if earlier_only else "") + " ORDER BY published",
                          (new_id, lo, hi) + ((published, new_id) if earlier_only else ())):
         if tagger.same_story(toks, tagger.title_tokens(r["title"])):
@@ -402,7 +412,7 @@ def _find_dup(con, new_id, title, published, earlier_only=False):
 def _dedupe_all(con):
     con.execute("UPDATE articles SET dup_of=NULL")
     con.commit()
-    for r in con.execute("SELECT id,title,published FROM articles ORDER BY published, id").fetchall():
+    for r in con.execute("SELECT id,title,published FROM articles WHERE official=0 ORDER BY published, id").fetchall():
         d = _find_dup(con, r["id"], r["title"], r["published"], earlier_only=True)
         if d:
             con.execute("UPDATE articles SET dup_of=? WHERE id=?", (d, r["id"]))
