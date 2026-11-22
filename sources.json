@@ -1,0 +1,281 @@
+{
+  "_note": "Vietnam sources, chosen 2026-11-22 from Daniel's list plus similar papers on planning, infrastructure, developers and projects. type rss = official RSS feed. type html = the app reads the section page and picks article links matching 'pattern' (no RSS available or the RSS is empty). 'checked' says whether the URL was opened and confirmed working when the list was made. official=true marks government sources: their items get the Official badge and are never flagged as promotional.",
+  "sources": [
+    {
+      "name": "VnExpress - Bất động sản",
+      "type": "rss",
+      "url": "https://vnexpress.net/rss/bat-dong-san.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "VnExpress - Kinh doanh",
+      "type": "rss",
+      "url": "https://vnexpress.net/rss/kinh-doanh.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "CafeF - Bất động sản",
+      "type": "rss",
+      "url": "https://cafef.vn/bat-dong-san.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "CafeF - Doanh nghiệp",
+      "type": "rss",
+      "url": "https://cafef.vn/doanh-nghiep.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Tuổi Trẻ - Nhà đất",
+      "type": "rss",
+      "url": "https://tuoitre.vn/rss/nha-dat.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Tuổi Trẻ - Kinh doanh",
+      "type": "rss",
+      "url": "https://tuoitre.vn/kinh-doanh.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Dân Trí - Bất động sản",
+      "type": "rss",
+      "url": "https://dantri.com.vn/rss/bat-dong-san.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Dân Trí - Kinh doanh",
+      "type": "rss",
+      "url": "https://dantri.com.vn/rss/kinh-doanh.rss",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Xây dựng - Quy hoạch, Hạ tầng",
+      "type": "rss",
+      "url": "https://baoxaydung.vn/rss/bat-dong-san/quy-hoach-ha-tang.rss",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Xây dựng - Dự án",
+      "type": "rss",
+      "url": "https://baoxaydung.vn/rss/bat-dong-san/du-an.rss",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Xây dựng - Thị trường BĐS",
+      "type": "rss",
+      "url": "https://baoxaydung.vn/rss/bat-dong-san/thi-truong.rss",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Xây dựng - Nhà đầu tư",
+      "type": "rss",
+      "url": "https://baoxaydung.vn/rss/bat-dong-san/nha-dau-tu.rss",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Xây dựng - Giao thông",
+      "type": "rss",
+      "url": "https://baoxaydung.vn/rss/giao-thong.rss",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "VnEconomy (English) - Property",
+      "type": "rss",
+      "url": "https://en.vneconomy.vn/property.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "CafeBiz",
+      "type": "html",
+      "url": "https://cafebiz.vn/",
+      "pattern": "https://cafebiz\\.vn/[a-z0-9-]+-\\d{15,}\\.chn",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "CafeLand - Tin tức",
+      "type": "html",
+      "url": "https://cafeland.vn/tin-tuc/",
+      "pattern": "https://cafeland\\.vn/tin-tuc/[a-z0-9-]+-\\d{5,}\\.html",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "CafeLand - Quy hoạch",
+      "type": "html",
+      "url": "https://cafeland.vn/quy-hoach/tai-can-duoc/",
+      "pattern": "https://cafeland\\.vn/quy-hoach/[a-z0-9-]+-\\d{5,}\\.html",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "CafeLand - Hạ tầng",
+      "type": "html",
+      "url": "https://cafeland.vn/tin-tuc/ha-tang/49/",
+      "pattern": "https://cafeland\\.vn/tin-tuc/[a-z0-9-]+-\\d{5,}\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "VietNamNet - Bất động sản",
+      "type": "html",
+      "url": "https://vietnamnet.vn/bat-dong-san",
+      "pattern": "https://vietnamnet\\.vn/[a-z0-9-]+-\\d{6,}\\.html",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "VietNamNet - Dự án",
+      "type": "html",
+      "url": "https://vietnamnet.vn/bat-dong-san/du-an",
+      "pattern": "https://vietnamnet\\.vn/[a-z0-9-]+-\\d{6,}\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Người Quan Sát - Hạ tầng, Quy hoạch",
+      "type": "html",
+      "url": "https://nguoiquansat.vn/bat-dong-san/ha-tang-quy-hoach",
+      "pattern": "https://nguoiquansat\\.vn/[a-z0-9-]+-\\d{5,}\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Người Quan Sát - Doanh nghiệp",
+      "type": "html",
+      "url": "https://nguoiquansat.vn/doanh-nghiep",
+      "pattern": "https://nguoiquansat\\.vn/[a-z0-9-]+-\\d{5,}\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Reatimes (Tạp chí BĐS Việt Nam)",
+      "type": "html",
+      "url": "https://reatimes.vn/",
+      "pattern": "https://reatimes\\.vn/[a-z0-9-]+-\\d{15,}\\.htm",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Báo Đầu tư - Thị trường địa ốc",
+      "type": "html",
+      "url": "https://baodautu.vn/batdongsan/thi-truong-dia-oc-d7/",
+      "pattern": "https://baodautu\\.vn/[a-z0-9-]+-d\\d+\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "VietnamFinance - Bất động sản",
+      "type": "html",
+      "url": "https://vietnamfinance.vn/bat-dong-san/",
+      "pattern": "https://vietnamfinance\\.vn/[a-z0-9-]+-d\\d+\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Kinh tế & Đô thị - Bất động sản",
+      "type": "html",
+      "url": "https://kinhtedothi.vn/bat-dong-san",
+      "pattern": "https://kinhtedothi\\.vn/[a-z0-9-]+\\.\\d{5,}\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "The Investor (English)",
+      "type": "html",
+      "url": "https://theinvestor.vn/",
+      "pattern": "https://theinvestor\\.vn/[a-z0-9-]+-d\\d+\\.html",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Công báo Chính phủ - Văn bản mới",
+      "type": "rss",
+      "url": "https://congbao.chinhphu.vn/cac-van-ban-moi-ban-hanh.rss",
+      "official": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Công báo Chính phủ - Số Công báo mới",
+      "type": "rss",
+      "url": "https://congbao.chinhphu.vn/cac-so-cong-bao-moi-dang.rss",
+      "official": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Công báo TP.HCM",
+      "type": "rss",
+      "url": "https://congbao.hochiminhcity.gov.vn/cong-bao/rss/rssview",
+      "official": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Công báo Hải Phòng",
+      "type": "html",
+      "url": "https://congbao.haiphong.gov.vn/",
+      "pattern": "https://congbao\\.haiphong\\.gov\\.vn/van-ban-[a-z-]+/.+\\.html",
+      "official": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Công báo Quảng Ngãi",
+      "type": "html",
+      "url": "https://congbao.quangngai.gov.vn/",
+      "pattern": "https://congbao\\.quangngai\\.gov\\.vn/cong-bao/[a-z0-9-]+\\.html",
+      "official": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Thanh tra Chính phủ - Tin tổng hợp",
+      "type": "rss",
+      "url": "https://thanhtra.gov.vn/web/guest/rss?p_p_id=com_teca_eportal_rsspublish_RssPublishPortlet_INSTANCE_yrjb&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_resource_id=rssPublishingResourceURL&p_p_cacheability=cacheLevelPage",
+      "official": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Thanh tra Chính phủ - Tin thanh tra",
+      "type": "rss",
+      "url": "https://thanhtra.gov.vn/web/guest/rss?p_p_id=com_teca_eportal_rsspublish_RssPublishPortlet_INSTANCE_dfws&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_resource_id=rssPublishingResourceURL&p_p_cacheability=cacheLevelPage",
+      "official": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Thanh tra - Nhà đất",
+      "type": "html",
+      "url": "https://thanhtra.com.vn/nha-dat-57A4B2310",
+      "pattern": "https://thanhtra\\.com\\.vn/nha-dat-57A4B2310/[a-z0-9-]+\\.html",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Thư viện Pháp luật - Pháp luật nhà đất",
+      "type": "html",
+      "url": "https://thuvienphapluat.vn/phap-luat-nha-dat",
+      "pattern": "https://thuvienphapluat\\.vn/phap-luat-nha-dat/[a-z0-9-]+-\\d+\\.html",
+      "checked": false,
+      "enabled": true
+    }
+  ]
+}
