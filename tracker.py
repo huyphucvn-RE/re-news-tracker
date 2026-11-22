@@ -31,6 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import insights
 import tagger
+import trackers
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(HERE, "articles.db")
@@ -84,6 +85,12 @@ def db():
             url TEXT, paper TEXT, list TEXT, rank INTEGER, seen TEXT,
             PRIMARY KEY (url, list, seen)
         );
+        CREATE TABLE IF NOT EXISTS facts (
+            id INTEGER PRIMARY KEY, article_id INTEGER, kind TEXT, key TEXT, name TEXT, stage TEXT,
+            province TEXT, data TEXT, snippet TEXT
+        );
+        CREATE INDEX IF NOT EXISTS facts_article ON facts(article_id);
+        CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
         CREATE TABLE IF NOT EXISTS source_status (
             url TEXT PRIMARY KEY,
             name TEXT,
@@ -112,6 +119,12 @@ def db():
         con.execute("ALTER TABLE articles ADD COLUMN events TEXT DEFAULT ''")
         con.execute("ALTER TABLE articles ADD COLUMN analyzed INTEGER DEFAULT 0")
         con.commit()
+    if "tags" not in cols:  # v1.8: your own deal tags per article
+        con.execute("ALTER TABLE articles ADD COLUMN tags TEXT DEFAULT ''")
+        con.commit()
+    v = con.execute("SELECT v FROM meta WHERE k='facts_rules'").fetchone()
+    if not v or int(v[0]) < trackers.RULES_VERSION:  # (re)build trackers from headlines + summaries
+        _refacts(con)
     if "relevance" not in cols:  # v1.4: relevance gate + duplicate detection
         con.execute("ALTER TABLE articles ADD COLUMN relevance TEXT DEFAULT 'core'")
         con.execute("ALTER TABLE articles ADD COLUMN dup_of INTEGER")
@@ -358,6 +371,25 @@ def save_watchlist(names):
         json.dump({"developers": names}, f, ensure_ascii=False, indent=2)
 
 
+def _save_facts(con, article_id, facts):
+    con.execute("DELETE FROM facts WHERE article_id=?", (article_id,))
+    for f in facts:
+        data = {k: v for k, v in f.items() if k not in ("kind", "key", "name", "stage", "province", "snippet") and v not in (None, "")}
+        con.execute("INSERT INTO facts (article_id,kind,key,name,stage,province,data,snippet) VALUES (?,?,?,?,?,?,?,?)",
+                    (article_id, f["kind"], f.get("key", ""), f.get("name", ""), f.get("stage", ""), f.get("province", ""),
+                     json.dumps(data, ensure_ascii=False), f.get("snippet", "")))
+
+
+def _refacts(con):
+    rows = con.execute("SELECT id,title,summary,provinces FROM articles WHERE (relevance<>'off' OR official=1) AND dup_of IS NULL").fetchall()
+    for r in rows:
+        _save_facts(con, r[0], trackers.extract(r[1], r[2] or "", r[3] or ""))
+    # re-read the full text of the last 30 days so the trackers see more than the headline
+    con.execute("UPDATE articles SET analyzed=0 WHERE published>=?", (_since(30),))
+    con.execute("INSERT OR REPLACE INTO meta VALUES ('facts_rules', ?)", (str(trackers.RULES_VERSION),))
+    con.commit()
+
+
 def _body(url):
     try:
         return insights.article_text(_get(url))
@@ -403,6 +435,7 @@ def analyze_pending(limit=None, con=None):
         if con.execute("SELECT 1 FROM prices WHERE article_id=? LIMIT 1", (r["id"],)).fetchone():
             types.add("prices")
         con.execute("UPDATE articles SET types=? WHERE id=?", (",".join(sorted(types)), r["id"]))
+        _save_facts(con, r["id"], trackers.extract(r["title"], text, r["provinces"] or ""))
         con.execute("UPDATE articles SET developers=?, events=?, analyzed=1 WHERE id=?",
                     (",".join(devs), ",".join(insights.developer_events(r["title"], r["summary"] or "")), r["id"]))
     con.commit()
@@ -654,6 +687,15 @@ def query_articles(params):
         args.append(params["source"])
     if params.get("starred") == "1":
         where.append("starred = 1")
+    if params.get("noted") == "1":
+        where.append("(COALESCE(note,'')<>'' OR COALESCE(tags,'')<>'')")
+    if params.get("tag"):
+        where.append("(','||tags||',') LIKE ?")
+        args.append(f"%,{params['tag']},%")
+    if params.get("ids"):
+        ids = [int(x) for x in params["ids"].split(",") if x.isdigit()][:500]
+        where.append("id IN (%s)" % (",".join("?" * len(ids)) or "NULL"))
+        args += ids
     if params.get("days"):
         where.append("published >= ?")
         days = int(params["days"])
@@ -711,6 +753,19 @@ def get_developers(days=180):
     return {"articles": rows, "watchlist": load_watchlist(), "all": list(insights.DEVELOPERS)}
 
 
+def get_trackers(days=365):
+    con = db()
+    rows = []
+    for r in con.execute(
+            "SELECT f.*, a.title, a.url, a.source, a.published, a.developers, a.official FROM facts f JOIN articles a ON a.id=f.article_id "
+            "WHERE a.published>=? AND a.dup_of IS NULL ORDER BY a.published DESC", (_since(days),)):
+        d = dict(r)
+        d.update(json.loads(d.pop("data") or "{}"))
+        rows.append(d)
+    con.close()
+    return {"facts": rows}
+
+
 def digest(hours=24):
     """Top news for the period, by region of Daniel's priority provinces, plus legal, prices and watchlist."""
     since = _since(hours / 24)
@@ -736,8 +791,17 @@ def digest(hours=24):
         "ORDER BY score DESC LIMIT 60", (since,))]
     dev = [d for d in dev if set(d["developers"].split(",")) & set(wl)][:12]
     con.close()
+    facts = [f for f in get_trackers(hours / 24 + 0.01)["facts"] if f["published"] >= since]
+    trk = {}
+    for f in facts:
+        if f["kind"] == "project":
+            continue
+        k = (f["kind"], f.get("key") or f["snippet"][:40], f.get("stage"))
+        if k not in trk:
+            trk[k] = f
     return {"hours": hours, "since": since, "regions": regions, "national": national,
-            "legal": legal, "prices": prices, "developers": dev}
+            "legal": legal, "prices": prices, "developers": dev, "trackers": list(trk.values())[:40],
+            "count": len(arts)}
 
 
 def digest_html(g, title):
@@ -859,8 +923,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(body)
-        elif u.path == "/tools.js":
-            with open(os.path.join(HERE, "static", "tools.js"), "rb") as f:
+        elif u.path in ("/tools.js", "/desk.js"):
+            with open(os.path.join(HERE, "static", u.path[1:]), "rb") as f:
                 body = f.read()
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
@@ -887,6 +951,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(get_developers(params.get("days", 180)))
         elif u.path == "/api/digest":
             self._json(digest(int(params.get("hours", 24))))
+        elif u.path == "/api/trackers":
+            self._json(get_trackers(params.get("days", 365)))
         elif u.path == "/api/popular":
             self._json(popular(int(params.get("days", 7))))
         elif u.path == "/api/info":
@@ -915,6 +981,14 @@ class Handler(BaseHTTPRequestHandler):
             con = db()
             con.execute("UPDATE articles SET starred=?, note=COALESCE(?, note) WHERE id=?",
                         (1 if b.get("starred") else 0, b.get("note"), b["id"]))
+            con.commit()
+            con.close()
+            self._json({"ok": True})
+        elif u.path == "/api/note":
+            b = self._body()
+            tags = ",".join(t.strip() for t in (b.get("tags") or "").split(",") if t.strip())
+            con = db()
+            con.execute("UPDATE articles SET note=?, tags=? WHERE id=?", ((b.get("note") or "").strip(), tags, b["id"]))
             con.commit()
             con.close()
             self._json({"ok": True})
@@ -958,7 +1032,7 @@ def build_site(out_dir=None):
     os.makedirs(out_dir, exist_ok=True)
     since = datetime.fromtimestamp(time.time() - SITE_DAYS * 86400, timezone.utc).isoformat()
     con = db()
-    cols = "id,url,title,summary,source,published,segments,signals,score,provinces,promo,official,relevance,dup_of,types,developers"
+    cols = "id,url,title,summary,source,published,fetched,segments,signals,score,provinces,promo,official,relevance,dup_of,types,developers"
     arts = [dict(r) for r in con.execute(f"SELECT {cols} FROM articles WHERE published>=? ORDER BY published DESC", (since,))]
     status = [dict(r) for r in con.execute("SELECT * FROM source_status ORDER BY name")]
     con.close()
@@ -966,6 +1040,7 @@ def build_site(out_dir=None):
             "prices": get_prices(180)["prices"], "legal": get_legal(365)["legal"],
             "developers": get_developers(180), "digest": {"24": digest(24), "168": digest(168)},
             "popular": {"7": popular(7), "30": popular(30)}, "type_labels": tagger.TYPE_LABELS,
+            "trackers": get_trackers(365)["facts"],
             "sources": load_sources()["sources"], "regions": tagger.REGION,
             "keys": {"segments": list(tagger.SEGMENTS), "signals": list(tagger.SIGNALS) + ["legal_doc"]}}
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
@@ -979,7 +1054,8 @@ def build_site(out_dir=None):
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(page)
     import shutil
-    shutil.copy(os.path.join(HERE, "static", "tools.js"), os.path.join(out_dir, "tools.js"))
+    for js in ("tools.js", "desk.js"):
+        shutil.copy(os.path.join(HERE, "static", js), os.path.join(out_dir, js))
     print(f"site written to {out_dir} ({len(arts)} articles)")
 
 

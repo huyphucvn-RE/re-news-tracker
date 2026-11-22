@@ -1,4 +1,4 @@
-# Real Estate News Tracker (v1.6)
+# Real Estate News Tracker (v1.8)
 
 Captures articles from real estate and business news RSS feeds, stores them in a local database (`articles.db`), tags each one, and shows a searchable list in your browser.
 
@@ -23,6 +23,15 @@ Needs Python 3.9 or later (python.org), nothing else to install. Unzip the folde
 - **Prices**: selling prices, rents, land prices, compensation and auction prices read from the full text of articles, by province and segment, with the evidence sentence and a median table. Export to Excel (CSV).
 - **Legal**: decrees, circulars, laws and provincial decisions on land prices, LURF/land rent, compensation, planning, housing and real estate business: document number, topics, effective date and the sentence that says what changes. 🆕 marks items new since your last visit.
 - **Developers**: a watchlist (tap to add/remove) with each developer's news grouped into launches, land & M&A, bonds & debt, inspections, results and approvals.
+- **Daily report pop-up**: the first time you open the app each day, a short report pops up: your keyword alerts, top stories by region, new items on the trackers, legal documents, prices and your developers. Reopen it any time with **📰 Today**.
+- **Trackers** (read by rules from headlines and article text; every figure shows the sentence it came from, so treat figures as leads to check):
+  - *Projects*: one card per named project with stages seen (investment policy, 1/2000, 1/500, land allocation, permit, groundbreaking, launch, handover, inspection), size, units, developer and a news timeline.
+  - *Deals*: M&A, project and land transfers, auctions with buyer, seller, asset, area, value (bn VND), stake and implied price per m².
+  - *Supply pipeline*: launches, approvals to sell, groundbreakings and handovers with unit counts and handover dates, plus units by province and stage.
+  - *Infrastructure*: metro, rail, ring roads, expressways, airports, bridges, ports with latest status, budget, target date and provinces.
+  - *Planning approvals*: 1/2000, 1/500 and general plans, investment policy decisions, planning adjustments, land allocation and inspections, by province.
+  - Each view filters by province, period and search, and exports to Excel (CSV).
+- **Alerts & notes**: your own keyword alerts (a project, street, company, document number) and your notes and deal tags (📝 on any article: Deal lead, Comparable, Land bank, Model input…). On your computer notes are saved in the database; on the phone page notes and alerts stay on that phone.
 - **Digest**: daily or weekly top stories for North / Central / South priority provinces, nationwide, legal, prices and your developers. "Copy as text" to paste into an email.
 
 **News tab**

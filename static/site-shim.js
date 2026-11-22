@@ -7,11 +7,15 @@
   const norm = (t) => " " + (t || "").toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ") + " ";
   const has = (csv, k) => ("," + (csv || "") + ",").includes("," + k + ",");
   const stars = () => { try { return JSON.parse(localStorage.getItem("stars") || "{}"); } catch (e) { return {}; } };
+  const notes = () => { try { return JSON.parse(localStorage.getItem("notes") || "{}"); } catch (e) { return {}; } };
   const reply = (obj) => new Response(JSON.stringify(obj), { headers: { "Content-Type": "application/json" } });
 
   function query(p) {
-    const st = stars();
-    let rows = DATA.articles.map((a) => Object.assign({}, a, { starred: st[a.id] ? 1 : 0 }));
+    const st = stars(), nt = notes();
+    let rows = DATA.articles.map((a) => Object.assign({}, a, { starred: st[a.id] ? 1 : 0, note: (nt[a.id] || {}).note || "", tags: (nt[a.id] || {}).tags || "" }));
+    if (p.get("ids")) { const ids = new Set(p.get("ids").split(",").map(Number)); rows = rows.filter((a) => ids.has(a.id)); }
+    if (p.get("noted") === "1") rows = rows.filter((a) => a.note || a.tags);
+    if (p.get("tag")) rows = rows.filter((a) => has(a.tags, p.get("tag")));
     const rel = p.get("relevance") || "re";
     if (rel === "re") rows = rows.filter((a) => a.relevance !== "off");
     if (rel === "core") rows = rows.filter((a) => a.relevance === "core");
@@ -72,6 +76,14 @@
     if (name === "developers") return reply(DATA.developers || { articles: [], watchlist: [], all: [] });
     if (name === "digest") return reply((DATA.digest || {})[u.searchParams.get("hours") || "24"] || {});
     if (name === "popular") return reply((DATA.popular || {})[u.searchParams.get("days") || "7"] || { articles: [], papers: [] });
+    if (name === "trackers") return reply({ facts: DATA.trackers || [] });
+    if (name === "note") {
+      const b = JSON.parse(opts.body), nt = notes();
+      const tags = (b.tags || "").split(",").map((t) => t.trim()).filter(Boolean).join(",");
+      if ((b.note || "").trim() || tags) nt[b.id] = { note: (b.note || "").trim(), tags }; else delete nt[b.id];
+      try { localStorage.setItem("notes", JSON.stringify(nt)); } catch (e) {}
+      return reply({ ok: true });
+    }
     if (name === "watchlist") return reply({ ok: true });  // saved on this device by the page
     if (name === "star") {
       const b = JSON.parse(opts.body), st = stars();

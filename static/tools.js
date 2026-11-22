@@ -244,7 +244,7 @@
     </div>`;
   }
 
-  const TABS = { prices, legal, developers, digest, reports };
+  const TABS = Object.assign({ prices, legal, developers, digest, reports }, window.EXTRA_TABS || {});
   window.showTab = function (name) {
     document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
     const news = name === "news";

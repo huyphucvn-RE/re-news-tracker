@@ -15,7 +15,8 @@
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 header{position:sticky;top:0;z-index:2;background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px}
-h1{font-size:17px;margin:0 0 8px}
+h1{font-size:17px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+#dailyBtn{font-size:13px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 input,select,button{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
 input[type=search]{flex:1;min-width:200px}
@@ -58,6 +59,12 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
 #filterBtn{display:none}
 .notice{background:var(--sig);border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px}
 .notice.err{background:#fdecea;color:#b71c1c}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto}
+.mbox{background:var(--card);color:var(--ink);border-radius:10px;padding:14px 16px;max-width:640px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.mbox h4{margin:12px 0 4px;font-size:13.5px}.mbox ul{margin:0;padding-left:18px}.mbox li{margin:3px 0}.mbox a{color:var(--ink)}
+.notebtn{cursor:pointer;border:none;background:none;font-size:14px;padding:0 4px;opacity:.55}.notebtn.on{opacity:1}
+.mynote{font-size:12.5px;margin-top:5px;background:var(--sig);border-radius:5px;padding:3px 7px}
+.sig.ok{color:var(--residential)}.sig.err{color:#d32f2f}
 /* phone layout */
 @media (max-width:700px){
   header{position:static;padding:10px 12px}
@@ -83,8 +90,8 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
 </head>
 <body>
 <header>
-  <h1>Real Estate News Tracker <button id="filterBtn">Filters ▾</button></h1>
-  <nav id="tabs"><button data-tab="news" class="on">News</button><button data-tab="prices">Prices</button><button data-tab="legal">Legal</button><button data-tab="developers">Developers</button><button data-tab="digest">Digest</button><button data-tab="reports">Reports</button></nav>
+  <h1>Real Estate News Tracker <span><button id="dailyBtn" title="Today's report">📰 Today</button> <button id="filterBtn">Filters ▾</button></span></h1>
+  <nav id="tabs"><button data-tab="news" class="on">News</button><button data-tab="prices">Prices</button><button data-tab="legal">Legal</button><button data-tab="developers">Developers</button><button data-tab="digest">Digest</button><button data-tab="trackers">Trackers</button><button data-tab="reports">Reports</button><button data-tab="alerts">Alerts &amp; notes</button></nav>
   <div id="newsControls">
   <div class="row">
     <input type="search" id="q" placeholder="Search (accents optional: 'gia dat' finds 'giá đất')">
@@ -187,10 +194,12 @@ async function load(){
     const promo=a.promo?'<span class="promo" title="Looks like sponsored or sales copy">Promotional?</span>':"";
     const dt=a.published?new Date(a.published).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}):"";
     return `<div class="art ${a.promo?"isPromo":""}"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">
-      <button class="star ${a.starred?"on":""}" data-id="${a.id}" data-s="${a.starred}" title="Star">★</button>
+      <div style="display:flex;flex-direction:column"><button class="star ${a.starred?"on":""}" data-id="${a.id}" data-s="${a.starred}" title="Star">★</button><button class="notebtn ${a.note||a.tags?"on":""}" data-n="${a.id}" title="Note and deal tags">📝</button></div>
       <div style="flex:1"><a class="t" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a>
       ${a.summary&&a.summary!==a.title?`<div class="s">${esc(a.summary)}</div>`:""}
-      <div class="tags">${off}${promo}${relb}${a.score>0?`<span class="prio" title="Priority score">P${a.score}</span>`:""}${provs}${segs}${sigs}<span class="src">${esc(a.source)} · ${dt}</span></div>${also}</div></div></div>`;}).join("");
+      <div class="tags">${off}${promo}${relb}${a.score>0?`<span class="prio" title="Priority score">P${a.score}</span>`:""}${provs}${segs}${sigs}<span class="src">${esc(a.source)} · ${dt}</span></div>${a.note||a.tags?`<div class="mynote">📝 ${esc(a.note||"")} ${(a.tags||"").split(",").filter(Boolean).map(t=>`<b>#${esc(t)}</b>`).join(" ")}</div>`:""}${also}</div></div></div>`;}).join("");
+  window._arts=Object.fromEntries(d.articles.map(a=>[a.id,a]));
+  $("list").querySelectorAll(".notebtn").forEach(b=>b.onclick=()=>window.editNote(window._arts[b.dataset.n],load));
   $("list").querySelectorAll(".star").forEach(b=>b.onclick=async()=>{await post("/api/star",{id:+b.dataset.id,starred:b.dataset.s!=="1"});load();});
 }
 
@@ -214,12 +223,14 @@ $("addSrc").onclick=async()=>{
     }
   }finally{b.disabled=false;b.textContent="Add source";}
 };
+$("dailyBtn").onclick=()=>window.showDaily();
 $("filterBtn").onclick=()=>$("filters").classList.toggle("open");
 fetch("/api/info").then(r=>r.json()).then(d=>{ if(d.updated){$("count").insertAdjacentHTML("beforebegin",`<div class="meta">Updated ${new Date(d.updated).toLocaleString()}</div>`);} if(d.phone_url && !/Mobi/.test(navigator.userAgent)){
   $("phoneHint").style.display="block";
   $("phoneHint").innerHTML=`📱 On your phone (same Wi-Fi), open <b>${esc(d.phone_url)}</b>, then "Add to Home Screen".`;}});
 load();
 </script>
+<script src="desk.js"></script>
 <script src="tools.js"></script>
 </body>
 </html>
