@@ -1,4 +1,4 @@
-# Real Estate News Tracker (v1.4)
+# Real Estate News Tracker (v1.6)
 
 Captures articles from real estate and business news RSS feeds, stores them in a local database (`articles.db`), tags each one, and shows a searchable list in your browser.
 
@@ -19,6 +19,13 @@ Needs Python 3.9 or later (python.org), nothing else to install. Unzip the folde
 - Windows: `start-windows.bat`. Mac: `start-mac.command`. Or `python3 tracker.py`.
 
 ## What you get
+**Tabs**
+- **Prices**: selling prices, rents, land prices, compensation and auction prices read from the full text of articles, by province and segment, with the evidence sentence and a median table. Export to Excel (CSV).
+- **Legal**: decrees, circulars, laws and provincial decisions on land prices, LURF/land rent, compensation, planning, housing and real estate business: document number, topics, effective date and the sentence that says what changes. 🆕 marks items new since your last visit.
+- **Developers**: a watchlist (tap to add/remove) with each developer's news grouped into launches, land & M&A, bonds & debt, inspections, results and approvals.
+- **Digest**: daily or weekly top stories for North / Central / South priority provinces, nationwide, legal, prices and your developers. "Copy as text" to paste into an email.
+
+**News tab**
 - **Real estate filter (on by default)**: every article is graded. *Real estate* = the headline is about property, land, planning/infrastructure or a property company. *Related* = property only in the summary, or rate/credit policy news that feeds your models. *Off-topic* = gold, stocks, fuel, FX, consumer goods etc.; hidden unless you choose "Everything".
 - **Same story once**: when several papers carry the same story within 4 days, you see it once with "Also reported by: CafeF, Dân Trí…" links.
 - **Search** across titles and summaries. Accents are optional, so `gia dat` finds `giá đất`.
@@ -43,4 +50,5 @@ Tagging is keyword based (`tagger.py`), in English and Vietnamese. Edit the keyw
 ## Other commands
 - `python3 tracker.py fetch` fetch only (for a Windows Task Scheduler / cron job)
 - `python3 tracker.py export` write `articles.csv`
+- `python3 tracker.py analyze 400` read the full text of up to 400 older articles (prices, legal, developers)
 - `python3 tracker.py retag` re-apply tags after editing `tagger.py`

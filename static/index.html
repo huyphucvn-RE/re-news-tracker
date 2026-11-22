@@ -46,6 +46,12 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
 .empty{color:var(--mute);text-align:center;padding:40px}
 .also{font-size:12px;color:var(--mute);margin-top:5px}.also a{color:var(--mute)}
 .online #fetchBtn,.online #srcPanel .row,.online #srcTable button,.online #addResult{display:none}
+#tabs{display:flex;gap:4px;margin:0 0 10px;overflow-x:auto}
+#tabs button{border:none;background:none;padding:6px 10px;border-radius:6px;font-weight:600;color:var(--mute);white-space:nowrap}
+#tabs button.on{background:var(--ink);color:var(--card)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;overflow-x:auto}
+.card a{color:var(--ink)}
+.ptable td{font-size:13px}
 .relb{border:1px dashed var(--mute);color:var(--mute);border-radius:4px;padding:0 6px}
 .off{background:#e8eaf6;color:#283593;border-radius:4px;padding:1px 7px;font-weight:600}
 @media (prefers-color-scheme:dark){.off{background:#283046;color:#c5cae9}}
@@ -78,6 +84,8 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
 <body>
 <header>
   <h1>Real Estate News Tracker <button id="filterBtn">Filters ▾</button></h1>
+  <nav id="tabs"><button data-tab="news" class="on">News</button><button data-tab="prices">Prices</button><button data-tab="legal">Legal</button><button data-tab="developers">Developers</button><button data-tab="digest">Digest</button></nav>
+  <div id="newsControls">
   <div class="row">
     <input type="search" id="q" placeholder="Search (accents optional: 'gia dat' finds 'giá đất')">
   </div>
@@ -96,8 +104,11 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
   </div>
   <div class="chips" id="segChips"></div>
   <div class="chips" id="sigChips"></div>
+</div>
 </header>
 <main>
+  <div id="toolView" style="display:none"></div>
+  <div id="newsView">
   <details id="srcPanel"><summary>Sources <span id="srcSummary" class="meta"></span></summary>
     <table id="srcTable"></table>
     <div class="row" style="margin-top:8px">
@@ -111,6 +122,7 @@ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}td,th{
   <div class="notice" id="phoneHint" style="display:none"></div>
   <div class="meta" id="count"></div>
   <div id="list"></div>
+  </div>
 </main>
 <script>
 const SEG_LABEL={residential:"Residential",office:"Office",industrial:"Industrial",retail:"Retail",land:"Land",policy:"Policy",infra:"Planning & infrastructure"};
@@ -208,5 +220,6 @@ fetch("/api/info").then(r=>r.json()).then(d=>{ if(d.updated){$("count").insertAd
   $("phoneHint").innerHTML=`📱 On your phone (same Wi-Fi), open <b>${esc(d.phone_url)}</b>, then "Add to Home Screen".`;}});
 load();
 </script>
+<script src="tools.js"></script>
 </body>
 </html>

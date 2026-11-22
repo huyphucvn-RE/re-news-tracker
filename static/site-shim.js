@@ -66,6 +66,11 @@
     if (name === "stats") return reply(stats());
     if (name === "sources") return reply({ sources: DATA.sources });
     if (name === "info") return reply({ updated: DATA.updated });
+    if (name === "prices") return reply({ prices: DATA.prices || [] });
+    if (name === "legal") return reply({ legal: DATA.legal || [] });
+    if (name === "developers") return reply(DATA.developers || { articles: [], watchlist: [], all: [] });
+    if (name === "digest") return reply((DATA.digest || {})[u.searchParams.get("hours") || "24"] || {});
+    if (name === "watchlist") return reply({ ok: true });  // saved on this device by the page
     if (name === "star") {
       const b = JSON.parse(opts.body), st = stars();
       if (b.starred) st[b.id] = 1; else delete st[b.id];

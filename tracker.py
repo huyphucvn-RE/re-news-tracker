@@ -29,6 +29,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import insights
 import tagger
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +70,16 @@ def db():
             relevance TEXT DEFAULT 'core',
             dup_of INTEGER
         );
+        CREATE TABLE IF NOT EXISTS prices (
+            id INTEGER PRIMARY KEY,
+            article_id INTEGER,
+            kind TEXT, value REAL, value_high REAL, currency TEXT, unit TEXT, per TEXT, label TEXT,
+            province TEXT, segment TEXT, snippet TEXT
+        );
+        CREATE TABLE IF NOT EXISTS legal (
+            article_id INTEGER PRIMARY KEY,
+            doc_type TEXT, doc_no TEXT, other_docs TEXT, topics TEXT, effective TEXT, change TEXT, draft INTEGER
+        );
         CREATE TABLE IF NOT EXISTS source_status (
             url TEXT PRIMARY KEY,
             name TEXT,
@@ -87,6 +98,11 @@ def db():
         _retag(con)
     if "official" not in cols:
         con.execute("ALTER TABLE articles ADD COLUMN official INTEGER DEFAULT 0")
+        con.commit()
+    if "developers" not in cols:  # v1.6: analyst functions
+        con.execute("ALTER TABLE articles ADD COLUMN developers TEXT DEFAULT ''")
+        con.execute("ALTER TABLE articles ADD COLUMN events TEXT DEFAULT ''")
+        con.execute("ALTER TABLE articles ADD COLUMN analyzed INTEGER DEFAULT 0")
         con.commit()
     if "relevance" not in cols:  # v1.4: relevance gate + duplicate detection
         con.execute("ALTER TABLE articles ADD COLUMN relevance TEXT DEFAULT 'core'")
@@ -317,6 +333,69 @@ def detect_source(url):
     return {"type": "html", "url": url, "pattern": pattern, "found": len(items), "sample": [i["title"] for i in items[:5]]}
 
 
+MAX_BODIES_PER_RUN = int(os.environ.get("MAX_BODIES", "120"))
+WATCHLIST_PATH = os.path.join(HERE, "watchlist.json")
+
+
+def load_watchlist():
+    try:
+        with open(WATCHLIST_PATH, encoding="utf-8") as f:
+            return json.load(f)["developers"]
+    except Exception:
+        return list(insights.DEFAULT_WATCHLIST)
+
+
+def save_watchlist(names):
+    with open(WATCHLIST_PATH, "w", encoding="utf-8") as f:
+        json.dump({"developers": names}, f, ensure_ascii=False, indent=2)
+
+
+def _body(url):
+    try:
+        return insights.article_text(_get(url))
+    except Exception:
+        return ""
+
+
+def analyze_pending(limit=None, con=None):
+    """Read the full text of relevant, not-yet-analysed articles and extract prices,
+    legal documents and developer news. Runs after every fetch."""
+    from concurrent.futures import ThreadPoolExecutor
+    own = con is None
+    con = con or db()
+    rows = con.execute(
+        "SELECT * FROM articles WHERE analyzed=0 AND (relevance<>'off' OR official=1) AND dup_of IS NULL "
+        "ORDER BY published DESC LIMIT ?", (limit or MAX_BODIES_PER_RUN,)).fetchall()
+    # official items: the RSS description already holds the document text; news: open the article
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        bodies = list(pool.map(lambda r: "" if r["official"] else _body(r["url"]), rows))
+    for r, body in zip(rows, bodies):
+        text = (r["summary"] or "") + "\n" + body
+        segs = (r["segments"] or "").split(",")
+        seg = next((x for x in segs if x and x not in ("policy", "infra")), segs[0] if segs else "")
+        con.execute("DELETE FROM prices WHERE article_id=?", (r["id"],))
+        for pr in insights.extract_prices(r["title"] + ". " + text):
+            provs = tagger._match_word(tagger.normalize(pr["snippet"]), tagger.PROVINCES) or (r["provinces"] or "").split(",")
+            con.execute("INSERT INTO prices (article_id,kind,value,value_high,currency,unit,per,label,province,segment,snippet)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (r["id"], pr["kind"], pr["value"], pr["value_high"], pr["currency"], pr["unit"], pr["per"],
+                         pr["label"], provs[0] if provs else "", seg, pr["snippet"]))
+        lg = insights.legal_info(r["title"], text, bool(r["official"]))
+        con.execute("DELETE FROM legal WHERE article_id=?", (r["id"],))
+        if lg:
+            con.execute("INSERT INTO legal VALUES (?,?,?,?,?,?,?,?)",
+                        (r["id"], lg["doc_type"], lg["doc_no"], lg["other_docs"], lg["topics"], lg["effective"],
+                         lg["change"], int(lg["draft"])))
+        devs = insights.developers(r["title"], (r["summary"] or "") + " " + body[:3000])
+        con.execute("UPDATE articles SET developers=?, events=?, analyzed=1 WHERE id=?",
+                    (",".join(devs), ",".join(insights.developer_events(r["title"], r["summary"] or "")), r["id"]))
+    con.commit()
+    if own:
+        con.close()
+    print(f"  analysed {len(rows)} articles", flush=True)
+    return len(rows)
+
+
 def _download(src):
     """Network part of a fetch (runs in parallel). Returns (items, error)."""
     try:
@@ -366,6 +445,10 @@ def fetch_all():
             report.append({"source": src["name"], "ok": bool(ok), "new": new, "message": msg})
             print(f"  {'OK ' if ok else 'ERR'} {src['name']}: {new} new" + ("" if ok else f" ({msg})"), flush=True)
         con.commit()
+        try:
+            analyze_pending(con=con)
+        except Exception as e:
+            print("  analysis failed:", e)
         con.close()
         return report
 
@@ -489,6 +572,77 @@ def query_articles(params):
     return {"total": total, "articles": rows}
 
 
+def _since(days):
+    return datetime.fromtimestamp(time.time() - float(days) * 86400, timezone.utc).isoformat()
+
+
+def get_prices(days=180):
+    con = db()
+    rows = [dict(r) for r in con.execute(
+        "SELECT p.*, a.title, a.url, a.source, a.published FROM prices p JOIN articles a ON a.id=p.article_id "
+        "WHERE a.published>=? ORDER BY a.published DESC", (_since(days),))]
+    con.close()
+    return {"prices": rows}
+
+
+def get_legal(days=365):
+    con = db()
+    rows = [dict(r) for r in con.execute(
+        "SELECT l.*, a.id, a.title, a.url, a.source, a.published, a.official, a.provinces FROM legal l "
+        "JOIN articles a ON a.id=l.article_id WHERE a.published>=? ORDER BY a.published DESC", (_since(days),))]
+    con.close()
+    return {"legal": rows}
+
+
+def get_developers(days=180):
+    con = db()
+    rows = [dict(r) for r in con.execute(
+        "SELECT id,title,url,source,published,developers,events,provinces,score,promo FROM articles "
+        "WHERE developers<>'' AND dup_of IS NULL AND published>=? ORDER BY published DESC", (_since(days),))]
+    con.close()
+    return {"articles": rows, "watchlist": load_watchlist(), "all": list(insights.DEVELOPERS)}
+
+
+def digest(hours=24):
+    """Top news for the period, by region of Daniel's priority provinces, plus legal, prices and watchlist."""
+    since = _since(hours / 24)
+    con = db()
+    arts = [dict(r) for r in con.execute(
+        "SELECT id,title,url,source,published,provinces,segments,signals,score,official,summary FROM articles "
+        "WHERE published>=? AND relevance<>'off' AND dup_of IS NULL AND promo=0 ORDER BY score DESC, published DESC", (since,))]
+    regions = {}
+    for reg in ("North", "Central", "South"):
+        names = [p for p, r in tagger.REGION.items() if r == reg]
+        regions[reg] = [a for a in arts if not a["official"]
+                        and any(n in (a["provinces"] or "").split(",") for n in names)][:8]
+    national = [a for a in arts if not a["provinces"] and not a["official"]][:8]
+    legal = [dict(r) for r in con.execute(
+        "SELECT l.doc_type,l.doc_no,l.topics,l.effective,l.change,a.title,a.url,a.source FROM legal l JOIN articles a ON a.id=l.article_id "
+        "WHERE a.published>=? ORDER BY a.published DESC LIMIT 12", (since,))]
+    prices = [dict(r) for r in con.execute(
+        "SELECT p.kind,p.value,p.value_high,p.label,p.province,a.title,a.url FROM prices p JOIN articles a ON a.id=p.article_id "
+        "WHERE a.published>=? ORDER BY a.published DESC LIMIT 20", (since,))]
+    wl = load_watchlist()
+    dev = [dict(r) for r in con.execute(
+        "SELECT title,url,source,developers,events FROM articles WHERE published>=? AND developers<>'' AND dup_of IS NULL "
+        "ORDER BY score DESC LIMIT 60", (since,))]
+    dev = [d for d in dev if set(d["developers"].split(",")) & set(wl)][:12]
+    con.close()
+    return {"hours": hours, "since": since, "regions": regions, "national": national,
+            "legal": legal, "prices": prices, "developers": dev}
+
+
+def prices_csv():
+    import io
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["published", "province", "segment", "type", "value", "value_high", "unit", "source", "title", "evidence", "url"])
+    for p in get_prices(3650)["prices"]:
+        w.writerow([p["published"][:10], p["province"], p["segment"], p["kind"], p["value"], p["value_high"] or "",
+                    p["label"], p["source"], p["title"], p["snippet"], p["url"]])
+    return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+
 def stats():
     con = db()
     out = {
@@ -552,12 +706,34 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(body)
+        elif u.path == "/tools.js":
+            with open(os.path.join(HERE, "static", "tools.js"), "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body)
         elif u.path == "/api/articles":
             self._json(query_articles(params))
         elif u.path == "/api/stats":
             self._json(stats())
         elif u.path == "/api/sources":
             self._json(load_sources())
+        elif u.path == "/api/prices":
+            self._json(get_prices(params.get("days", 180)))
+        elif u.path == "/api/prices.csv":
+            body = prices_csv()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", "attachment; filename=prices.csv")
+            self.end_headers()
+            self.wfile.write(body)
+        elif u.path == "/api/legal":
+            self._json(get_legal(params.get("days", 365)))
+        elif u.path == "/api/developers":
+            self._json(get_developers(params.get("days", 180)))
+        elif u.path == "/api/digest":
+            self._json(digest(int(params.get("hours", 24))))
         elif u.path == "/api/info":
             self._json({"phone_url": PHONE_URL})
         elif u.path == "/api/export.csv":
@@ -576,6 +752,9 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         if u.path == "/api/fetch":
             self._json({"report": fetch_all()})
+        elif u.path == "/api/watchlist":
+            save_watchlist(self._body().get("developers", []))
+            self._json({"ok": True})
         elif u.path == "/api/star":
             b = self._body()
             con = db()
@@ -629,6 +808,8 @@ def build_site(out_dir=None):
     status = [dict(r) for r in con.execute("SELECT * FROM source_status ORDER BY name")]
     con.close()
     data = {"updated": datetime.now(timezone.utc).isoformat(), "articles": arts, "status": status,
+            "prices": get_prices(180)["prices"], "legal": get_legal(365)["legal"],
+            "developers": get_developers(180), "digest": {"24": digest(24), "168": digest(168)},
             "sources": load_sources()["sources"], "regions": tagger.REGION,
             "keys": {"segments": list(tagger.SEGMENTS), "signals": list(tagger.SIGNALS) + ["legal_doc"]}}
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
@@ -641,6 +822,8 @@ def build_site(out_dir=None):
     page = page.replace('<a href="/api/export.csv">', '<a href="data.json" download>')
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(page)
+    import shutil
+    shutil.copy(os.path.join(HERE, "static", "tools.js"), os.path.join(out_dir, "tools.js"))
     print(f"site written to {out_dir} ({len(arts)} articles)")
 
 
@@ -698,6 +881,9 @@ if __name__ == "__main__":
         print(export_csv())
     elif cmd == "build-site":
         build_site()
+    elif cmd == "analyze":  # read full text of older articles (backfill)
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 400
+        analyze_pending(limit=n)
     elif cmd == "retag":
         retag_all()
     else:

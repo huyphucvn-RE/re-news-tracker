@@ -1,3 +1,5 @@
 site/
 __pycache__/
 articles.csv
+articles.db
+watchlist.json

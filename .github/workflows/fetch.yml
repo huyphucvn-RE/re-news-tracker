@@ -17,22 +17,28 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    env:
+      MAX_BODIES: "300"   # articles whose full text is read per run (prices, legal details, developers)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Fetch all sources
+      - name: Restore the article database (kept on the 'data' branch so main stays small)
+        run: |
+          if git fetch --depth 1 origin data; then git show FETCH_HEAD:articles.db > articles.db; fi
+          ls -la articles.db || echo "starting a new database"
+      - name: Fetch all sources and analyse new articles
         run: python tracker.py fetch
       - name: Build the phone page
         run: python tracker.py build-site
       - name: Save the article database
         run: |
-          git config user.name "news-bot"
-          git config user.email "news-bot@users.noreply.github.com"
-          git add articles.db
-          git commit -m "Fetch $(date -u +%Y-%m-%dT%H:%MZ)" || echo "nothing new"
-          git push
+          mkdir -p /tmp/data && cp articles.db /tmp/data/ && cd /tmp/data
+          git init -q -b data
+          git -c user.name="news-bot" -c user.email="news-bot@users.noreply.github.com" add articles.db
+          git -c user.name="news-bot" -c user.email="news-bot@users.noreply.github.com" commit -q -m "Database $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
