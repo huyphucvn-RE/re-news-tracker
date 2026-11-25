@@ -1,5 +1,5 @@
 {
-  "_note": "Vietnam sources, chosen 2026-11-22 from Daniel's list plus similar papers on planning, infrastructure, developers and projects. type rss = official RSS feed. type html = the app reads the section page and picks article links matching 'pattern' (no RSS available or the RSS is empty). 'checked' says whether the URL was opened and confirmed working when the list was made. official=true marks government sources: their items get the Official badge and are never flagged as promotional. re_section=true marks a paper's property/planning section: items there count as Related even without a property keyword, unless clearly off-topic. most_read = the papers' own most-read lists, checked every hour; an article's read score is how many hours it stayed on those lists.",
+  "_note": "Vietnam sources, chosen 2026-11-22 from Daniel's list plus similar papers on planning, infrastructure, developers and projects. type rss = official RSS feed. type html = the app reads the section page and picks article links matching 'pattern' (no RSS available or the RSS is empty). 'checked' says whether the URL was opened and confirmed working when the list was made. official=true marks government sources: their items get the Official badge and are never flagged as promotional. re_section=true marks a paper's property/planning section: items there count as Related even without a property keyword, unless clearly off-topic. most_read = the papers' own most-read lists, checked every hour; an article's read score is how many hours it stayed on those lists. Sources added 2026-11-25 from Daniel's shortlist picks; checked=false ones could not be opened from the cloud and need a first run on his computer.",
   "sources": [
     {
       "name": "VnExpress - Bất động sản",
@@ -294,6 +294,158 @@
       "type": "html",
       "url": "https://thuvienphapluat.vn/phap-luat-nha-dat",
       "pattern": "https://thuvienphapluat\\.vn/phap-luat-nha-dat/[a-z0-9-]+-\\d+\\.html",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Thanh Niên - Địa ốc",
+      "type": "rss",
+      "url": "https://thanhnien.vn/rss/kinh-te/dia-oc.rss",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Thanh Niên - Kinh tế",
+      "type": "rss",
+      "url": "https://thanhnien.vn/rss/kinh-te.rss",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "VnEconomy - Địa ốc",
+      "type": "rss",
+      "url": "https://vneconomy.vn/dia-oc.rss",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Tiền Phong - Địa ốc",
+      "type": "html",
+      "url": "https://tienphong.vn/dia-oc/",
+      "pattern": "https://tienphong\\.vn/[a-z0-9-]+-post\\d+\\.tpo",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Znews - Bất động sản",
+      "type": "html",
+      "url": "https://znews.vn/bat-dong-san.html",
+      "pattern": "https://znews\\.vn/[a-z0-9-]+-post\\d+\\.html",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Diễn đàn Doanh nghiệp - Bất động sản",
+      "type": "html",
+      "url": "https://diendandoanhnghiep.vn/bat-dong-san",
+      "pattern": "https://diendandoanhnghiep\\.vn/[a-z0-9-]+-\\d{7,}\\.html",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Vietstock - Thị trường nhà đất",
+      "type": "rss",
+      "url": "https://vietstock.vn/4220//bat-dong-san/thi-truong-nha-dat.rss",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Vietstock - Dự án",
+      "type": "rss",
+      "url": "https://vietstock.vn/4222/bat-dong-san/du-an.rss",
+      "re_section": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Batdongsan.com.vn - Tin tức",
+      "type": "html",
+      "url": "https://wiki.batdongsan.com.vn/tin-tuc",
+      "pattern": "https://wiki\\.batdongsan\\.com\\.vn/tin-tuc/[^/?#]+-\\d{6,}",
+      "re_section": true,
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Báo Chính phủ - Kinh tế",
+      "type": "html",
+      "url": "https://baochinhphu.vn/kinh-te.htm",
+      "pattern": "https://baochinhphu\\.vn/[a-z0-9-]+-\\d{15,}\\.htm",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Báo Chính phủ - Chỉ đạo, quyết định",
+      "type": "html",
+      "url": "https://baochinhphu.vn/chi-dao-quyet-dinh-cua-chinh-phu-thu-tuong-chinh-phu.htm",
+      "pattern": "https://baochinhphu\\.vn/[a-z0-9-]+-\\d{15,}\\.htm",
+      "official": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Báo Đồng Nai - Kinh tế",
+      "type": "html",
+      "url": "https://baodongnai.com.vn/kinh-te",
+      "pattern": "https://baodongnai\\.com\\.vn/[a-z0-9-]+-\\d{5,}\\.html",
+      "checked": true,
+      "enabled": true
+    },
+    {
+      "name": "Báo Đồng Nai - Hạ tầng dự án",
+      "type": "html",
+      "url": "https://baodongnai.com.vn/kinh-te/ha-tang-du-an",
+      "pattern": "https://baodongnai\\.com\\.vn/[a-z0-9-]+-\\d{5,}\\.html",
+      "re_section": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Pháp luật TP.HCM - Địa ốc",
+      "type": "html",
+      "url": "https://plo.vn/dia-oc/",
+      "pattern": "https://plo\\.vn/[a-z0-9-]+-post\\d+\\.html",
+      "re_section": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "VietnamPlus - Kinh tế",
+      "type": "html",
+      "url": "https://www.vietnamplus.vn/kinh-te/",
+      "pattern": "https://www\\.vietnamplus\\.vn/[a-z0-9-]+-post\\d+\\.vnp",
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Đầu tư Chứng khoán - Bất động sản",
+      "type": "html",
+      "url": "https://www.tinnhanhchungkhoan.vn/bat-dong-san/",
+      "pattern": "https://www\\.tinnhanhchungkhoan\\.vn/[a-z0-9-]+-post\\d+\\.html",
+      "re_section": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "VietnamBiz - Nhà đất",
+      "type": "html",
+      "url": "https://vietnambiz.vn/nha-dat.htm",
+      "pattern": "https://vietnambiz\\.vn/[a-z0-9-]+-\\d{15,}\\.htm",
+      "re_section": true,
+      "checked": false,
+      "enabled": true
+    },
+    {
+      "name": "Tuổi Trẻ - Saigon Times (ex-KTSG)",
+      "type": "html",
+      "url": "https://tuoitre.vn/tto-saigontimes.htm",
+      "pattern": "https://tuoitre\\.vn/[a-z0-9-]+-\\d{15,}\\.htm",
       "checked": false,
       "enabled": true
     }
