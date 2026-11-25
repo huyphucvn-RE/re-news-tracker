@@ -1,4 +1,4 @@
-# Real Estate News Tracker (v1.8)
+# Real Estate News Tracker (v1.9)
 
 Captures articles from real estate and business news RSS feeds, stores them in a local database (`articles.db`), tags each one, and shows a searchable list in your browser.
 
